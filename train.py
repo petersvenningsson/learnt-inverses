@@ -1,59 +1,85 @@
 import torch
 import torch.nn as nn
+from torchvision.transforms import Normalize
 
 from model import NeuralNet
 import exponentials
-from config import n_components, sample_gitter
+from config import max_components, sample_gitter
+import matplotlib.pyplot as plt
 
-# TODO Parametrize network depth ect, normalize input, grid search
-# Loss function based on the signal instead of the parameters
-# Predict value small value which is mapped to the value interval
-# Add regularization
+# Grid search:
+# Learning rate, hidden size, n_layers, if output is scaled to interval, just normal weight L2 regularization
 
-# TODO Remove gradient on validtion
-# TODO Use softmax on weights
-# TODO Take second power of params
+# TODO grid search, Linear sampling in log scale of signal
+# Add regularization - add later if we encounter problems with ofysikaliska values
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Define Hyper-parameters 
-input_size = 784
 hidden_size = 1024
 num_params = 20
 num_epochs = 1000000
-batch_size = 100
-learning_rate = 0.001
+batch_size = 128
+learning_rate = 0.0001
+n_layers = 6
 
-model = NeuralNet(sample_gitter.shape[0], hidden_size, num_params).to(device)
-criterion = nn.CrossEntropyLoss()
+model = NeuralNet(sample_gitter.shape[0], hidden_size, num_params, n_layers).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)  
 mse = nn.MSELoss()
 l1 = nn.L1Loss()
 
-x, labels_val = exponentials.sample_linear_combination(batch_size*100)
-x_val = x.to(device)
-labels_val = labels_val.to(device)
+# # Draw standardization data
+# x, _, _ = exponentials.sample_linear_combination(5000000, device = 'cpu')
+# std = x.std(axis=0).to(device)
+# mean = x.mean(axis=0).to(device)
 
-current_best = 1000000
+# Draw validation data
+x_val, params_val, weights_val = exponentials.sample_linear_combination(500000, device)
+
+current_best = 1e20
 
 for epoch in range(num_epochs):
-    x, params = exponentials.sample_linear_combination(batch_size)
+    x, params, weights = exponentials.sample_linear_combination(batch_size, device)
     x = x.to(device)
-    params = params.to(device)
-    y = model(x)
-    predicted_x = exponentials.linear_combination(y[:,:10], y[:,10:])
+
+    predicted_params, predicted_weights = model(x)
+    predicted_x = exponentials.linear_combination(predicted_params, predicted_weights, device)
 
     loss = l1(predicted_x, x)
 
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    if epoch%100 == 0:
-        y = model(x_val)
+    optimizer.zero_grad()
 
-        predicted_x = exponentials.linear_combination(y[:,:10], y[:,10:])
-        loss = l1(predicted_x, x_val)
-        if loss < current_best:
-            current_best = loss
-        
-        print(f"The validation MSE is {loss}, current best = {current_best}")
+    if epoch%500 == 0:
+        with torch.no_grad():
+            predicted_params, predicted_weights = model(x_val)
+
+            predicted_x = exponentials.linear_combination(predicted_params, predicted_weights, device)
+            
+            loss = l1(predicted_x, x_val)
+            # Two choices for limiting predicted params to realistic intervals
+            ## 1. Add loss regularization loss to keep parameters inside interval
+            ## A little bit of loss based on the generated parameters
+            if loss < current_best:
+                current_best = loss
+            plt.plot(sample_gitter.cpu().numpy().squeeze(), (predicted_x)[0,:].cpu().numpy())
+            plt.plot(sample_gitter.cpu().numpy().squeeze(), x_val[0,:].cpu().numpy())
+            plt.legend(['predicted signal', 'true signal'])
+            plt.xlabel('sampling gitter')
+            plt.ylabel('y')
+            plt.title('Plot of y(sampling gitter)')
+            plt.savefig('validation.png')
+            plt.clf()
+
+            if 0:
+                print("Predictions")
+                for i in range(max_components):
+                    print(f"Weight: {predicted_weights[0,i]:.5f}, Parameter {predicted_params[0,i]:.5f}")
+                
+                print('True values')
+                for i in range(max_components):
+                    print(f"Weight: {weights_val[0,i]:.5f}, Parameter {params_val[0,i]:.5f}")          
+
+            print(f"The validation MSE is {loss}, current best = {current_best}")
