@@ -2,9 +2,9 @@ import torch
 from numpy import random
 import numpy as np
 
-from config import max_components, sample_gitter, param_interval, weighting_scheme
+from config import max_components, sample_gitter, param_interval
 
-def sample_linear_combination(batch_size, device):
+def sample_linear_combination(batch_size, device, weighting_scheme):
     # Maybe more realistic to draw components from dirichlet distribution
     # import numpy as np, numpy.random
     # print np.random.dirichlet(np.ones(10),size=1)
@@ -39,6 +39,5 @@ def linear_combination(k, w, device):
 
 
 if __name__ == '__main__':
-    time_series, params = sample_linear_combination(batch_size = 58)
-    time_series = linear_combination(params[:10,:],params[10:,:])
+    sample_linear_combination(100, 'cpu', 'dirichlet')
     print('s')
