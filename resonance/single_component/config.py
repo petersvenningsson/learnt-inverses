@@ -1,7 +1,10 @@
 import sample
+import numpy as np
 
 max_components = 10
-parameters = ('dpar','dperp','theta','phi','d0','rpar','rperp','r1','r2')
+bounded_parameters = ['dpar','dperp','d0','rpar','rperp','r1','r2']
+cyclic_parameters = ['theta','phi',]
+
 
 parameter_interval = {
 'dpar' : (sample.opt['dmin'], sample.opt['dmax']),
@@ -11,4 +14,9 @@ parameter_interval = {
 'rperp': (sample.opt['rmin'], sample.opt['rmax']),
 'r1'   : (sample.opt['r1min'], sample.opt['r1max']),
 'r2'   : (sample.opt['r2min'], sample.opt['r2max']),
+}
+
+phase_interval = {
+    'theta': (0, np.pi),
+    'phi': (0, 2*np.pi)
 }

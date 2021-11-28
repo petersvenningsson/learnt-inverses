@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from config import max_components, sample_gitter, param_interval
+from config import max_components, parameters, parameter_interval
 
 # Fully connected neural network
 class NeuralNet(nn.Module):
@@ -33,15 +33,25 @@ class NeuralNet(nn.Module):
         out = self.relu(out)
         out = self.output_layer(out)
 
-        params, weights = out[:,:-max_components], out[:,max_components:]
+        _params, weights = out[:,:-max_components], out[:,-max_components:]
 
         # Normalize weights
         weights = weights**2
         # weights = self.softmax(weights)
         weights = weights/weights.sum(1).unsqueeze(1)
 
-        # Map to parameter interval
-        if self.normalized_output:
-            params = params*(param_interval['k']['max']-param_interval['k']['min'])/2 + (param_interval['k']['max']-param_interval['k']['min'])/2
+        # # Map to parameter interval
+        # if self.normalized_output:
+        #     params = params*(param_interval['k']['max']-param_interval['k']['min'])/2 + (param_interval['k']['max']-param_interval['k']['min'])/2
 
-        return params, weights
+        dist = {}
+        for j, parameter in enumerate(parameters):
+            dist[parameter] = _params[:,j*10:(j+1)*10].unsqueeze(1)
+
+        dist['w'] = weights.unsqueeze(1)
+
+        # scale to interval
+        for parameter in parameter_interval.keys():
+            dist[parameter] = parameter_interval[parameter][0]*(parameter_interval[parameter][1]/parameter_interval[parameter][0])**dist[parameter]
+
+        return dist

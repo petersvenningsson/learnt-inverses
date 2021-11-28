@@ -25,7 +25,7 @@ from scipy.optimize import nnls
 # import nibabel as nib #https://nipy.org
 import matplotlib.pyplot as plt
 
-max_components = 10
+max_components = 1
 
 # Inversion options
 do_multicpu = 0
@@ -139,7 +139,7 @@ def xpsdist2dtomega(xps,dist,device):
 
     omega_tile = torch.tile(omega, (Ncomp,1)).to(device)
     dist_tile = {}
-    for varnam in dist_varnams: # 'w', 'dpar', 'dperp', 'theta', 'phi', 'd0', 'rpar', 'rperp', 'r1', 'r2'
+    for varnam in dist.keys(): # 'w', 'dpar', 'dperp', 'theta', 'phi', 'd0', 'rpar', 'rperp', 'r1', 'r2'
         val = dist[varnam].to(device)  
         dist_tile.update( {varnam:torch.tile(val.reshape(Ncomp,1), (1,Nomega))} )    
    
@@ -228,30 +228,12 @@ def kernel(xps, dist, device):
     Kr2 = torch.exp(torch.matmul(xps['te'], dist['r2'].T))
     K = Kd*Kr1*Kr2
     
-
-    # signal_mixture = K @ w
-    
     return K
 
 
 def draw(device, batch_size, weighting_scheme):
 
-    dist = dist_rand(n_components=max_components*batch_size)
-
-    if weighting_scheme == 'uniform':
-        components = torch.randint(low=1, high=max_components, size=(batch_size,))
-        w = torch.rand((batch_size, max_components))
-
-        for i, c in enumerate(components):
-            w[i, c:] = 0
-            w = (w/w.sum(axis=1).unsqueeze(1)).to(device)
-
-    elif weighting_scheme == 'dirichlet':
-        scale_factors = np.random.rand(batch_size)*1 + 1/100
-        _w = np.array([np.random.dirichlet(np.ones(max_components)*s, size = 1) for s in scale_factors])
-        w = torch.Tensor(_w).squeeze().to(device)
-    w = w.unsqueeze(1)
-    dist['w'] = w
+    dist = dist_rand(n_components=batch_size)
     
     # Cast to torch tensors
     for k in xps.keys():
@@ -265,43 +247,30 @@ def draw(device, batch_size, weighting_scheme):
     K = kernel(xps, dist, device)
 
     # Format into batches
-    K = torch.reshape(K, (batch_size, K.shape[0], max_components)).to(device)
+    K = K.T
 
-    for k in dist.keys():
-        dist[k] = torch.reshape(dist[k], (batch_size, 1, max_components))
-
-    # Take signal mixture as linear cominbation w.r.t weights w
-    signal_mixture = (K * dist['w']).sum(axis=2)
-    signal_mixture = signal_mixture.to(device)
-
-    return signal_mixture, dist
+    return K, dist
 
 
 def generate_signal(dist, batch_size, device):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    w = dist['w']
 
-    for k in dist.keys():
-        dist[k] = torch.reshape(dist[k], (batch_size*max_components, 1))
+    # for k in dist.keys():
+    #     dist[k] = torch.reshape(dist[k], (batch_size, 1))
 
-    K = kernel(xps, dist, device)
+    K = kernel(xps, dist, device).T
 
-    # Format into batches
-    K = torch.reshape(K, (batch_size, K.shape[0], max_components))
-    
-    # Take signal mixture as linear cominbation w.r.t weights w
-    signal_mixture = (K * w).sum(axis=2)
-    signal_mixture = signal_mixture.to(device)
+    # # Format into batches
+    # K = torch.reshape(K, (batch_size, K.shape[0]))
 
-    # Polite reshape back for debugging
-    for k in dist.keys():
-        dist[k] = torch.reshape(dist[k], (batch_size, 1, max_components))
+    # # Polite reshape back for debugging
+    # for k in dist.keys():
+    #     dist[k] = torch.reshape(dist[k], (batch_size, 1))
 
-    return signal_mixture
+    return K
 
 
 if __name__ == '__main__':
     signal_mixture, dist = draw('cpu', 128, 'uniform')
-    signal_mixture_rec = generate_signal(dist, 128)
+    signal_mixture_rec = generate_signal(dist, 128, 'cuda')
 
     print('s')
