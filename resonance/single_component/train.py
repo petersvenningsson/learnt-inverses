@@ -11,9 +11,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 input_size = 809
 
+# TODO
+# Model interface for multiple compnents is completed. Time to add multiple components to sample.py. Remember, mistakes were done with reshape. Be careful check check check
+
 # Define Hyper-parameters 
 hidden_size = 2048
-num_params = 7 + 2*2 # 7 scalar paramters and 2 periodic parameters
+num_params = (7 + 2*2 + 1)*max_components # 7 scalar paramters and 2 periodic parameters and 1 weight
 num_epochs = 1000000    
 batch_size = 32
 learning_rate = 0.000001

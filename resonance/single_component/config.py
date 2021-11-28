@@ -15,8 +15,3 @@ parameter_interval = {
 'r1'   : (sample.opt['r1min'], sample.opt['r1max']),
 'r2'   : (sample.opt['r2min'], sample.opt['r2max']),
 }
-
-phase_interval = {
-    'theta': (0, np.pi),
-    'phi': (0, 2*np.pi)
-}

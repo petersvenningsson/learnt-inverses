@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from config import max_components, bounded_parameters, cyclic_parameters, parameter_interval, phase_interval
+from config import max_components, bounded_parameters, cyclic_parameters, parameter_interval
 
 # Fully connected neural network
 class NeuralNet(nn.Module):
@@ -9,7 +9,8 @@ class NeuralNet(nn.Module):
         super(NeuralNet, self).__init__()
         assert n_layers > 2, "Please specify more than 2 layers"
         self.n_layers = n_layers - 2
-        self.normalized_output = normalized_output
+        self.output_size = output_size
+        self.n_parameters = int(output_size/max_components)
 
         self.input_layer = nn.Linear(input_size, hidden_size)
 
@@ -25,24 +26,22 @@ class NeuralNet(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # Plan of attack
+
         out = self.input_layer(x)
 
         for hidden_layer in self.hidden_layers:
             out = hidden_layer(out)
             out = self.relu(out)
 
-        out = self.relu(out)
         out = self.sigmoid(self.output_layer(out))
 
-        _params = out
-    
+        params = out.reshape(-1, max_components, self.n_parameters)
 
         dist = {}
         
         index = 0
         for j, parameter in enumerate(bounded_parameters):
-            dist[parameter] = _params[:,index].unsqueeze(1)
+            dist[parameter] = params[:,:,index].unsqueeze(2)
             index += 1
 
         # scale bounded variables to interval
@@ -51,16 +50,18 @@ class NeuralNet(nn.Module):
 
         for parameter in cyclic_parameters:
 
-            cos = _params[:,index] - 0.5
+            cos = params[:,:,index] - 0.5
             index = index + 1
 
-            sin = _params[:,index] - 0.5
+            sin = params[:,:,index] - 0.5
             index = index + 1
 
             if parameter == 'phi':
-                dist[parameter] = ((torch.atan(sin/cos) + torch.pi/2)*2).unsqueeze(1)
+                dist[parameter] = ((torch.atan(sin/cos) + torch.pi/2)*2)
             
             if parameter == 'theta':
-                dist[parameter] = (torch.atan(sin/cos) + torch.pi/2).unsqueeze(1)
+                dist[parameter] = (torch.atan(sin/cos) + torch.pi/2)
+
+        dist['w'] = (params[:,:,index]/(params[:,:,index].sum(1).unsqueeze(1))).unsqueeze(2)
 
         return dist
